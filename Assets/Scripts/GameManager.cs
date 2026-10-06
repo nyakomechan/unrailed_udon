@@ -20,15 +20,18 @@ public class GameManager : UdonSharpBehaviour
     [UdonSynced] public int woodCount;
     [UdonSynced] public int ironCount;
     [UdonSynced] public int railStock;
+    [UdonSynced] public int resetSerial;
 
     public TrackManager trackManager;
     public TrainController trainController;
     public ChunkManager chunkManager;
     public ScorePersistence scorePersistence;
     public RailStackWagon railStackWagon;
+    public Transform spawnPoint;
+
+    private int _seenSerial = -1;
 
     public float countdownSeconds = 3f;
-    public float crashResetDelay = 5f;
     public float stationStopSeconds = 10f;
     public int stationTiles = 30;
     public int railStockMax = 8;
@@ -124,19 +127,11 @@ public class GameManager : UdonSharpBehaviour
         score = ComputeScore();
         RequestSerialization();
         ApplyState();
-        SendCustomEventDelayedSeconds(nameof(_ResetAfterCrash), crashResetDelay);
     }
 
     private int ComputeScore()
     {
         return stationCount * 100 + Mathf.FloorToInt(trainController.trackDistance);
-    }
-
-    public void _ResetAfterCrash()
-    {
-        if (!Networking.IsOwner(gameObject)) return;
-        if (runState != StateCrashed) return;
-        OwnerResetRun();
     }
 
     public void OwnerResetRun()
@@ -157,8 +152,17 @@ public class GameManager : UdonSharpBehaviour
             chunkManager.OwnerResetChunks();
             chunkManager.OwnerReturnAllPickups();
         }
+        resetSerial++;
         RequestSerialization();
         ApplyState();
+        RespawnLocalPlayer();
+    }
+
+    private void RespawnLocalPlayer()
+    {
+        VRCPlayerApi lp = Networking.LocalPlayer;
+        if (lp == null || spawnPoint == null) return;
+        lp.TeleportTo(spawnPoint.position, spawnPoint.rotation);
     }
 
     public void OwnerDepositResource(int itemType, GameObject pickupObject)
@@ -220,6 +224,15 @@ public class GameManager : UdonSharpBehaviour
 
     public override void OnDeserialization()
     {
+        if (_seenSerial < 0)
+        {
+            _seenSerial = resetSerial;
+        }
+        else if (resetSerial != _seenSerial)
+        {
+            _seenSerial = resetSerial;
+            RespawnLocalPlayer();
+        }
         ApplyState();
     }
 
