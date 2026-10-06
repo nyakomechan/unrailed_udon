@@ -1,0 +1,19 @@
+{
+    "name": "WorldQualitySettingsEditorAssembly",
+    "rootNamespace": "",
+    "references": [
+        "GUID:84265b35cca3905448e623ef3903f0ff",
+        "GUID:54e33f36b02f6364f82a91ea2f35b806"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

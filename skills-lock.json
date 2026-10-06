@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "unity-vrc-udon-sharp": {
+      "source": "niaka3dayo/agent-skills-vrc-udon",
+      "sourceType": "github",
+      "skillPath": "skills/unity-vrc-udon-sharp/SKILL.md",
+      "computedHash": "17883b48514af1a2855e7dea6c3a2770c90a3109dd934354c7e2a407acf41584"
+    },
+    "unity-vrc-world-sdk-3": {
+      "source": "niaka3dayo/agent-skills-vrc-udon",
+      "sourceType": "github",
+      "skillPath": "skills/unity-vrc-world-sdk-3/SKILL.md",
+      "computedHash": "4a996712cf9cc482bcc5de088d8b8941066a1ccd8ec4e4bad632ae78e89371df"
+    }
+  }
+}

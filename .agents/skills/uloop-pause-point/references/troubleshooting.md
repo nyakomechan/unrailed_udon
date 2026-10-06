@@ -1,0 +1,94 @@
+# Pause Point Troubleshooting
+
+Read this when a wait times out, `HitCount` stays `0`, or `enable-pause-point` fails.
+
+## Timeout Diagnosis
+
+A `PAUSE_POINT_EXPIRED` error carries the same `Error.Details.Hint` as a timeout plus a shell-neutral `Error.Details.RecommendedNextAction`. Inspect `Error.Details.Status`, `HitCount`, `Generation`, `EnabledAtUtc`, `EditorState`, `ElapsedSinceEnabledMilliseconds`, and `RemainingMilliseconds` to distinguish input not being consumed, stale evidence from an older marker generation, runtime conditions not being met, an id mismatch, or Unity already being paused. `ElapsedSinceEnabledMilliseconds` is measured from `enable-pause-point`, not from `await-pause-point`. A wait timeout that is not waiting for a new hit on a continuous/trace marker auto-clears the marker; `Error.Details.MarkerClearedByThisCommand` is true when this command did that.
+
+The `--timeout-seconds` countdown freezes only while a pause-point hit holds the Editor paused; the elapsed pause duration is credited back onto the marker's expiry on resume, so inspecting a paused hit for as long as you need does not erode the remaining timeout budget. A manual pause without a hit does not stop the countdown. When the marker then expires during that manual pause, it turns `Expired` and the pause stays in place; expiry never resumes a pause that no pause-point hit caused.
+
+A `PAUSE_POINT_EXPIRED` error means the marker's own `enable-pause-point --timeout-seconds` window (measured from enable, not from wait) ran out first — re-enable the pause point with its original selector (`--file`/`--line`, or `--id` only for a named marker) and a longer `--timeout-seconds`; clearing the expired marker first is not required. When `--trigger` was passed, the expired envelope also carries `Error.Details.TriggerResult` (with `Completed: false` and no `Error` field when the trigger's outcome was still unknown at expiry) — such a result carries an `Explanation` field stating that the wait settled first and the trigger may still have delivered its input.
+
+Expired responses include `MethodEntryCount`: `0` means the armed method was never invoked; a positive value with `HitWhenSkippedCount` of `0` means the method ran but never reached the armed line (branch not taken). A positive `HitWhenSkippedCount` means the armed line ran but no hit matched `--hit-when`. For `async` and iterator methods the count is state-machine `MoveNext` entries, so each `await` resumption (async) or iteration step (iterator) increments it. This interpretation applies to `--file`/`--line` markers only — a named `UloopPausePoint.Pause` marker enabled with `--id` has no instrumented method, always reports `MethodEntryCount: 0`, and expires with the generic message. Expired `RecommendedNextAction` follows the same split: a longer `--timeout-seconds` when the method never ran, a "timeout alone will not help" recovery when `MethodEntryCount` is positive and `HitWhenSkippedCount` is `0`, and a `--hit-when` adjustment when `HitWhenSkippedCount` is positive.
+
+## Hit Preconditions
+
+A pause point hits only when control flow reaches the patched line (or the `Pause(id)` call). `simulate-keyboard` returning `PressEdgeObserved=true` means the input edge was observed, not that your target game logic has reached the pause line yet.
+
+If a `simulate-*` command instead returns a failure whose message says PlayMode is paused, suspect a pause point hit rather than an unrelated failure: an active pause point can make PlayMode paused mid-simulation, and the `simulate-*` call surfaces that as a preflight failure. The failure response names the responsible marker in `RejectedByActivePausePointId`, and sets `RejectedBeforeExecution: true` for any pre-execution refusal. A `--trigger` refused that way aborts the wait right away with `PAUSE_POINT_TRIGGER_FAILED` quoting the refusal, instead of waiting the marker out. When `RejectedByActivePausePointId` names the marker being awaited, the wait reads that marker's status once more: a hit that counts for this wait (for a continuous/trace marker already hit when the wait began, only a `LastHitSequence` newer than the one at wait start) is reported as the wait's success (with `TriggerFailed: true` and the refusal `Warning`), and a marker that was not hit — for example one re-armed while PlayMode was still paused by its previous hit — fails fast the same way. Check `uloop pause-point-status --id <id>` first to confirm the hit before treating it as a bug in the simulated action itself.
+
+## A Frame Wait While a Hit Holds the Pause
+
+A command that waits for a frame or a physics step cannot finish while the Editor is paused — no frame arrives — and `uloop` is single-flight, so every later command is rejected with `UNITY_SERVER_BUSY` (its `Error.Details.Data.isPaused` is `true`). `clear-pause-point` and `control-play-mode --action Resume` are rejected the same way, so no command releases the pause and waiting never ends. The usual way in: a marker is armed, its hit pauses the Editor, and an `execute-dynamic-code` snippet that awaits the next frame is running or is started afterwards.
+
+`uloop pause-point-status` still answers while Unity is busy — use it to confirm a hit is holding the pause. Then recover either way:
+
+1. Stop the uloop process that is running the command (Ctrl-C in its terminal, otherwise interrupt or kill that process). Its request is cancelled and returns no result, the Editor pause is released, and the next command runs. This does not apply to every tool: a `run-tests` run that respects Enter Play Mode settings, and a `compile` that waits for a domain reload, are deliberately not cancelled when their client disconnects, so stopping the process leaves the pause in place — use step 2 for those.
+2. Release the pause in the Editor (Edit > Play Mode > Pause). Frames resume, so the running command finishes and returns its result.
+
+Avoid the state instead: never start a frame-waiting snippet while a marker is armed or while the Editor is paused — starting it after the hit deadlocks the same way. Take the hit first (`await-pause-point`, or `enable-pause-point --await`) and inspect the capture; when you are done, resume play (`control-play-mode --action Resume` — the gate is free at that point) and only then run the frame-waiting snippet. While the pause holds, run only snippets that do not wait for a frame or a physics step.
+
+## Locating Where Control Flow Stops
+
+To locate where control flow stops before an unhit line, bisect with a second pause point on the method's entry (its first executable line). If the entry point hits while the target line stays at `HitCount=0`, an early return or a branch between the two lines is filtering execution — inspect the guard values in the entry hit's `CapturedVariables` instead of retrying the original line.
+
+## JIT Inlining
+
+Mono can inline very small target methods into callers, and the pause point then never fires even though the line runs. If a line demonstrably runs but the pause point stays unhit and nothing else explains it, move the pause point into the calling method.
+
+## Physics Message Methods and One-Hop Helpers
+
+Unity physics message methods (`OnCollisionEnter2D`, `OnTriggerEnter2D`, and similar callbacks) can silently miss: a GameObject that already existed at enable time may keep calling the pre-patch code, so `HitCount` stays `0` even though the method body runs. The condition is environment-dependent. On `enable-pause-point --await`, that enable-time patch diagnostic joins the hit response's `Warnings` prefixed with `At enable time:` — the prefix marks it as independent of whether the marker later hit. On a non-hit failure, the same text is under `Error.Details.EnableWarning`. The same applies one hop out — a helper called from a physics message method in the same compiled assembly; deeper call chains or callers in other assemblies are not detected by the warning but can fail the same way. When a marker that recorded this physics warning at enable time expires, `Message` and `RecommendedNextAction` name this cached-dispatch case instead of claiming the method was never invoked. Markers whose callers were not detected — a deeper call chain, or a caller in another assembly — still expire with the conventional "never invoked" wording.
+
+Recovery order:
+
+1. Confirm the body actually ran after arming, via evidence from fresh contact — a stale pre-arm counter or log proves nothing.
+2. `clear-pause-point` the marker, `enable-pause-point` it again, and wait for the next fresh contact.
+3. Recreate the GameObject after enabling.
+4. Embed `UloopPausePoint.Pause("<id>")` in the method body and use an id-only marker.
+
+A one-way cross-check: hot-reload a temporary log line into the method (`uloop hot-reload`) and re-trigger — the log appearing proves the body ran even though the marker missed; the log staying absent proves nothing, because the same cached dispatch can bypass the hot-reload patch too.
+
+## Pre-Bound Delegates
+
+A method already bound into a delegate or event before `enable-pause-point` may not fire through that delegate: the pre-bound invocation path can bypass the patch. Workarounds: enable the pause point before the delegate is created, recreate the subscribing GameObject, or re-bind the delegate (e.g. via `execute-dynamic-code`) after enabling.
+
+## Hot-Reload Line Resolution
+
+`--line` is always a line of the edited file, before or after hot reload. On a hot-reload patched method the marker resolves against the patched body, and `RetargetedToHotReloadPatch: true` in the response confirms it is armed on the edited code — that flag is not a problem; it means the marker follows the patched body and keeps firing at the edited line. On a method the reload did not patch, the edited line is mapped onto the verified source snapshot of the last compile, so a line shifted by edits above it still arms the same statement. `CapturedVariables` never includes fields added by hot reload (their values live in a side table); enable-pause-point warns when the resolved type has any. While paused, read one from `execute-dynamic-code` with `HotReloadAddedFieldWiring.TryReadInstanceField` (`TryReadStaticField` for a static field), as `references/added-field-wiring.md` in the uloop-hot-reload skill shows; naming the field as a member fails with CS1061.
+
+Successful `--file`/`--line` enables also report `LineBasis`. `EditedFile` means `--line` was resolved on the edited file, and `ResolvedLine` / `ResolvedLineText` are the edited file's. `LastCompiledSource` appears only when the file has no verified source snapshot: `--line` was then used as a compiled line number, `ResolvedLine` is a compiled line, and a Warning asks for `uloop compile` to refresh the snapshot. Check `ResolvedMethod` before trusting such a marker.
+
+A line that is not in the last compiled source — added or changed since the last compile, or a blank or comment line whose next statement is — is refused with `PAUSE_POINT_LINE_NOT_COMPILED` instead of arming the next compiled statement. Hot-reload the edit (a line inside a patched method's edited body then arms the edited code) or run `uloop compile`, then retry with the same `--line`. To arm compiled code without either, pick a statement that is unchanged since the last compile. When the last hot reload of the file already read it as it is on disk now, reloading the same contents cannot change the answer, so the refusal says so and lists the `Methods[]` rows that reload skipped or could not apply: change what a listed row's `Reason` names and reload, or run `uloop compile`.
+
+A method hot reload *added* (an `Added` row) cannot hold a pause point: it exists only in the hot reload shim and has no compiled body. A line inside it is refused with `PAUSE_POINT_RESOLVE_FAILED` and a message naming that added method; it is never armed on another method instead, and `--method` does not change that. Run `uloop compile`, then enable the pause point on that line again.
+
+`PAUSE_POINT_PATCHED_BY_HOT_RELOAD` is returned when the edited line resolves to a statement of a hot-reload patched method's compiled body, which no longer runs, or when a blank or comment line's next statement is an uncompiled line inside a patched method's edited body. The message names the method and its edited body range; retry with `--line` inside that range. When there is no range, the message says which of these applies:
+
+- The last hot reload of the file skipped the method or could not apply it, so the body an earlier hot reload applied still runs, and no line of the file can be armed in it. The message names the method's `Methods[]` row in that hot reload response: change what its `Reason` names and reload, or run `uloop compile`.
+- The last hot reload read the file as it is now but did not apply the method again, so an earlier patch still runs. When that reload left other `Methods[]` rows (a `(file)` row for a syntax error, or a failing method that kept the whole file unapplied), the message lists them: change what their `Reason` names and reload, or run `uloop compile` (a syntax error stops the compile too). With no row left at all, run `uloop compile`.
+- No range was recorded for the method's patch. Pick a line inside the edited method body or run `uloop compile`.
+
+A patched method whose patch has no debug symbols is refused the same way; run `uloop compile` and re-enable.
+
+`PAUSE_POINT_PATCHED_SOURCE_CHANGED` is returned when `--line` falls inside a hot-reload patched method but the file changed on disk after that patch was applied — the last reload of the file did not apply (for example a compile error), or the file was edited without reloading. The running patch still follows the line numbers of the source it was compiled from, so a marker placed now would stop at a different statement than the one shown, and the method's edited body range is unknown until the file is reloaded. Run `uloop hot-reload` on the file again (fix any compile error first) or revert the edit, then retry. When the last hot reload read the file as it is now but did not apply the method, the refusal is `PAUSE_POINT_PATCHED_BY_HOT_RELOAD` instead, because reloading the same contents would not apply it either. A line that rounds into a patched method, such as the blank line right above it, gets the same refusal; unchanged statements of methods without a patch are not affected.
+
+`SuppressedByHotReload: true` on a status response means a later hot-reload transition (apply, a newer generation, or revert) could not re-target the armed marker; the reason is in `SuppressedByHotReloadReason` and surfaced as the status `Warning`. The marker is not cleared — it fires again once a transition restores its line, or after `uloop compile` and a re-enable. Recover by reverting the patch (`uloop hot-reload --revert-all`), editing so the line exists again and re-running `uloop hot-reload`, or running `uloop compile` and re-enabling the marker.
+
+## Enable Failures
+
+If `enable-pause-point` fails, branch on the failure `ErrorCode` and follow `RecommendedNextAction`; `Message` explains the rejection in prose. Codes: `INVALID_ARGUMENT` (fix the rejected argument and re-run), `PAUSE_POINT_RELEASE_CODE_OPTIMIZATION` (automatic Debug switch and recompile did not leave the Editor in Debug; retry after a successful compile), `PAUSE_POINT_RESOLVE_FAILED` (the file:line could not be mapped to a patch location), `PAUSE_POINT_PATCH_FAILED` (the resolved method cannot be patched), `PAUSE_POINT_LINE_NOT_COMPILED` (the requested line, or a statement the resolver had to round to, is not in the last compiled source; run `uloop hot-reload` or `uloop compile`, or pick a compiled line; when the last hot reload already read the file as it is, follow the listed rows instead of reloading again), `PAUSE_POINT_PATCHED_BY_HOT_RELOAD` (the line resolves into a patched method's compiled body, or its next statement is uncompiled inside a patched method; use a line in its edited body, or, when an earlier hot reload's body still runs, follow the named or listed rows' `Reason` or compile), `PAUSE_POINT_PATCHED_SOURCE_CHANGED` (the file changed since the patch the line resolves into; reload the file, see above).
+
+If enable fails with a "No sequence point found" error (worded "No compiled statement exists on or after line N" when `--line` was read as a line of the file on disk) even for clearly executable lines, that script's assembly lacks debug sequence points and no line in the file can be patched. Move the pause point to a script in an assembly that carries them, such as a script under `Assets/`.
+
+A "No method named '<name>' ..." failure means no method matching `--method` has a statement on or after `--line`. The match is case-sensitive, on the simple name or `Type.Method`, and a name that matches no method in the file fails on every line and after every compile, so check `--method` (or drop it) before moving `--line`.
+
+## Debug-switch trade-offs
+
+The warning that the Debug switch happened means the pause point is already armed: do not
+interrupt the flow or ask the user about it mid-run. At the next stopping point you may
+propose `uloop set-code-optimization debug --startup` (session-only without `--startup`),
+and only apply it if the user approves.
+
+The automatic Debug switch changes only the current project's code optimization for this Editor session; it reverts on every Editor restart, and each re-switch costs a full script recompile. `uloop set-code-optimization debug --startup` makes Debug the startup default through a machine-wide Unity preference that applies to every project. Only the project's C# scripts run slower, mainly in Play Mode - the Editor itself is not slowed.

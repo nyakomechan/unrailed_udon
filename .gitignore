@@ -1,0 +1,29 @@
+# Unity generated
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]serSettings/
+[Mm]emoryCaptures/
+
+# IDE / build artifacts
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+.vs/
+.idea/
+.vscode/
+
+# Runtime local state
+ClientSimStorage/
+.uloop/
+
+# OS
+Thumbs.db
+.DS_Store

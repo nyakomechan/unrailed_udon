@@ -1,0 +1,31 @@
+{
+  "name": "com.nyakomechan.vrchat-multisim",
+  "displayName": "VRChat MultiSim",
+  "version": "0.2.5",
+  "unity": "2022.3",
+  "description": "In-editor multiplayer simulation for VRChat worlds.",
+  "author": {
+    "name": "nyakomake",
+    "url": "https://github.com/nyakomechan"
+  },
+  "license": "MIT",
+  "documentationUrl": "https://github.com/nyakomechan/VRChatMultiSim",
+  "changelogUrl": "https://github.com/nyakomechan/VRChatMultiSim/releases",
+  "vpmDependencies": {
+    "com.vrchat.worlds": ">=3.10.0 <3.11.0"
+  },
+  "samples": [
+    {
+      "displayName": "MultiSim Test Board",
+      "description": "UdonSharp gimmick (manual sync counter + parametrized network event) for verifying the multiplayer simulation.",
+      "path": "Samples~/MultiSimTestBoard"
+    }
+  ],
+  "keywords": [
+    "vrchat",
+    "clientsim",
+    "parrelsync",
+    "multiplayer",
+    "udon"
+  ]
+}

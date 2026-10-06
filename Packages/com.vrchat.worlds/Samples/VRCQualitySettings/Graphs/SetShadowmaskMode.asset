@@ -1,0 +1,112 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f11136daadff0b44ac2278a314682ab, type: 3}
+  m_Name: SetShadowmaskMode
+  m_EditorClassIdentifier: 
+  serializedUdonProgramAsset: {fileID: 11400000, guid: ea5193cad2e7a55458883a22b7dee336, type: 2}
+  udonAssembly: ".data_start\r\n\r\n    .export EnableDistanceShadowmaks\r\n    \r\n   
+    __Boolean_0: %SystemBoolean, null\r\n    __value_0: %UnityEngineShadowmaskMode,
+    null\r\n    __value_1: %UnityEngineShadowmaskMode, null\r\n    EnableDistanceShadowmaks:
+    %SystemBoolean, null\r\n\r\n.data_end\r\n\r\n.code_start\r\n\r\n    .export _start\r\n   
+    \r\n    _start:\r\n    \r\n        PUSH, EnableDistanceShadowmaks\r\n       
+    JUMP_IF_FALSE, 0x00000028\r\n        PUSH, __value_0\r\n        EXTERN, \"VRCSDK3RenderingVRCQualitySettings.__set_ShadowmaskMode__UnityEngineShadowmaskMode__SystemVoid\"\r\n       
+    JUMP, 0x00000038\r\n        PUSH, __value_1\r\n        EXTERN, \"VRCSDK3RenderingVRCQualitySettings.__set_ShadowmaskMode__UnityEngineShadowmaskMode__SystemVoid\"\r\n       
+    JUMP, 0xFFFFFFFC\r\n    \r\n\r\n.code_end\r\n"
+  assemblyError: 
+  graphData:
+    name: 
+    description: 
+    nodes:
+    - fullName: Event_Start
+      uid: 0bbc1cd8-50b8-413a-a5b2-f21fcd288978
+      position: {x: -132.19745, y: -214.00003}
+      nodeUIDs: []
+      flowUIDs:
+      - df351927-2236-4a52-b8c4-e676756ecc01
+      nodeValues: []
+    - fullName: VRCSDK3RenderingVRCQualitySettings.__set_ShadowmaskMode__UnityEngineShadowmaskMode__SystemVoid
+      uid: 622bb326-544d-400f-af58-b738dea755c4
+      position: {x: 653.03735, y: -93.35497}
+      nodeUIDs:
+      - 
+      flowUIDs: []
+      nodeValues:
+      - unityObjectValue: {fileID: 0}
+        stringValue: UnityEngine.ShadowmaskMode, UnityEngine.CoreModule, Version=0.0.0.0,
+          Culture=neutral, PublicKeyToken=null|Shadowmask
+    - fullName: Variable_SystemBoolean
+      uid: 18d60e6e-6b06-440e-8246-f149b8fa57f2
+      position: {x: 0, y: 0}
+      nodeUIDs:
+      - 
+      - 
+      - 
+      - 
+      - 
+      flowUIDs: []
+      nodeValues:
+      - unityObjectValue: {fileID: 0}
+        stringValue: 
+      - unityObjectValue: {fileID: 0}
+        stringValue: System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089|EnableDistanceShadowmaks
+      - unityObjectValue: {fileID: 0}
+        stringValue: System.Boolean, mscorlib, Version=4.0.0.0, Culture=neutral,
+          PublicKeyToken=b77a5c561934e089|True
+      - unityObjectValue: {fileID: 0}
+        stringValue: System.Boolean, mscorlib, Version=4.0.0.0, Culture=neutral,
+          PublicKeyToken=b77a5c561934e089|False
+      - unityObjectValue: {fileID: 0}
+        stringValue: System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089|none
+    - fullName: Get_Variable
+      uid: 60936f5b-62e9-48a0-aeb9-18b573bbb5d3
+      position: {x: 189.03738, y: -93.35497}
+      nodeUIDs:
+      - 
+      flowUIDs: []
+      nodeValues:
+      - unityObjectValue: {fileID: 0}
+        stringValue: System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089|18d60e6e-6b06-440e-8246-f149b8fa57f2
+      - unityObjectValue: {fileID: 0}
+        stringValue: 
+    - fullName: Branch
+      uid: af0f0853-b824-4bf6-90d9-c57fce521930
+      position: {x: 480.0374, y: -211.35501}
+      nodeUIDs:
+      - 60936f5b-62e9-48a0-aeb9-18b573bbb5d3|0
+      flowUIDs:
+      - 296dc13a-baeb-4c8c-9b13-91ffcf7966be
+      - 622bb326-544d-400f-af58-b738dea755c4
+      nodeValues:
+      - unityObjectValue: {fileID: 0}
+        stringValue: System.Boolean, mscorlib, Version=4.0.0.0, Culture=neutral,
+          PublicKeyToken=b77a5c561934e089|False
+    - fullName: VRCSDK3RenderingVRCQualitySettings.__set_ShadowmaskMode__UnityEngineShadowmaskMode__SystemVoid
+      uid: 296dc13a-baeb-4c8c-9b13-91ffcf7966be
+      position: {x: 653.03735, y: -211.35501}
+      nodeUIDs:
+      - 
+      flowUIDs: []
+      nodeValues:
+      - unityObjectValue: {fileID: 0}
+        stringValue: UnityEngine.ShadowmaskMode, UnityEngine.CoreModule, Version=0.0.0.0,
+          Culture=neutral, PublicKeyToken=null|DistanceShadowmask
+    - fullName: Block
+      uid: df351927-2236-4a52-b8c4-e676756ecc01
+      position: {x: 62.024967, y: -214.00003}
+      nodeUIDs: []
+      flowUIDs:
+      - af0f0853-b824-4bf6-90d9-c57fce521930
+      nodeValues: []
+    updateOrder: 0
+  graphElementData: []
+  version: 1.0.0
+  showAssembly: 0
