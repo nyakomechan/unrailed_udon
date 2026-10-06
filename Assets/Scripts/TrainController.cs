@@ -89,8 +89,16 @@ public class TrainController : UdonSharpBehaviour
         for (int i = 0; i < wagonVisuals.Length; i++)
         {
             if (wagonVisuals[i] == null) continue;
-            float wd = Mathf.Max(d - wagonSpacing * (i + 1), 0f);
-            wagonVisuals[i].SetPositionAndRotation(trackManager.GetPositionAt(wd), Quaternion.LookRotation(SafeTangent(wd)));
+            float wd = d - wagonSpacing * (i + 1);
+            if (wd >= 0f)
+            {
+                wagonVisuals[i].SetPositionAndRotation(trackManager.GetPositionAt(wd), Quaternion.LookRotation(SafeTangent(wd)));
+            }
+            else
+            {
+                Vector3 t0 = SafeTangent(0f);
+                wagonVisuals[i].SetPositionAndRotation(trackManager.GetPositionAt(0f) + t0 * wd, Quaternion.LookRotation(t0));
+            }
         }
     }
 

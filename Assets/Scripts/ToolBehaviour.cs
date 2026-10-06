@@ -10,29 +10,24 @@ public class ToolBehaviour : UdonSharpBehaviour
     public int toolType;
     public ChunkManager chunkManager;
     public float tickInterval = 0.5f;
+    public AudioSource swingSource;
 
     private float _lastTickTime = -999f;
-    private int _lastTarget = -1;
 
-    void Start()
+    void OnTriggerEnter(Collider col)
     {
-        Rigidbody rb = GetComponent<Rigidbody>();
-        if (rb != null) rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        TryHarvest(col);
     }
 
-
-    void OnTriggerEnter(Collider collision)
+    void OnTriggerStay(Collider col)
     {
-        TryHarvest(collision.transform.position);
-    }
-    void OnTriggerStay(Collider collision)
-    {
-        TryHarvest(collision.transform.position);
+        TryHarvest(col);
     }
 
     public override void OnPickupUseDown()
     {
         if (!Networking.IsOwner(gameObject)) return;
+        if (Time.time - _lastTickTime < tickInterval) return;
 
         Vector3 point = Vector3.zero;
         bool found = false;
@@ -42,7 +37,7 @@ public class ToolBehaviour : UdonSharpBehaviour
         Collider[] near = Physics.OverlapSphere(headPos, 0.85f, 1, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < near.Length; i++)
         {
-            if (near[i].GetComponentInParent<VRCPickup>() != null) continue;
+            if (!IsNodeCollider(near[i])) continue;
             float d = (near[i].transform.position - headPos).sqrMagnitude;
             if (d < best) { best = d; point = near[i].transform.position; found = true; }
         }
@@ -56,28 +51,34 @@ public class ToolBehaviour : UdonSharpBehaviour
             RaycastHit[] hits = Physics.RaycastAll(ray, 4f, 1, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < hits.Length; i++)
             {
-                if (hits[i].collider.GetComponentInParent<VRCPickup>() != null) continue;
+                if (!IsNodeCollider(hits[i].collider)) continue;
                 if (hits[i].distance < best) { best = hits[i].distance; point = hits[i].point; found = true; }
             }
         }
 
-        if (found) TryHarvest(point);
+        if (found) SendHarvest(point);
     }
 
-    private void TryHarvest(Vector3 p)
+    private bool IsNodeCollider(Collider col)
+    {
+        return col != null && col.name.StartsWith("Node");
+    }
+
+    private void TryHarvest(Collider col)
     {
         if (!Networking.IsOwner(gameObject)) return;
-        if (chunkManager == null) return;
+        if (!IsNodeCollider(col)) return;
+        if (Time.time - _lastTickTime < tickInterval) return;
+        SendHarvest(col.transform.position);
+    }
 
+    private void SendHarvest(Vector3 p)
+    {
+        if (chunkManager == null) return;
+        _lastTickTime = Time.time;
         int tx = Mathf.FloorToInt(p.x - chunkManager.origin.x + 0.5f);
         int tz = Mathf.FloorToInt(p.z - chunkManager.origin.z + 0.5f);
-
-        int target = (tx << 8) | (tz & 255);
-        if (target != _lastTarget || Time.time - _lastTickTime >= tickInterval)
-        {
-            _lastTarget = target;
-            _lastTickTime = Time.time;
-            chunkManager.SendCustomNetworkEvent(NetworkEventTarget.Owner, "RequestHarvestTile", tx, tz, toolType);
-        }
+        chunkManager.SendCustomNetworkEvent(NetworkEventTarget.Owner, "RequestHarvestTile", tx, tz, toolType);
+        if (swingSource != null) swingSource.PlayOneShot(swingSource.clip);
     }
 }

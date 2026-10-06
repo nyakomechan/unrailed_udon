@@ -36,6 +36,9 @@ public class ChunkManager : UdonSharpBehaviour
     [Header("Debug (-1 = use tier curve)")]
     public int debugForceTier = -1;
 
+    [Header("Keep-clear strip (depot/scoreboard area)")]
+    public int keepClearXMax = 10;
+
     private const uint LayerTree = 0x9E3779B9u;
     private const uint LayerRock = 0x3C6EF372u;
     private const uint LayerWater = 0x7F4A7C15u;
@@ -65,6 +68,12 @@ public class ChunkManager : UdonSharpBehaviour
     public VRCObjectPool ironPool;
     public ResourceSync resourceSync;
     public Vector3 origin = Vector3.zero;
+
+    [Header("SFX")]
+    public AudioClip treeBreakClip;
+    public AudioClip rockBreakClip;
+    public AudioSource[] sfxSources = new AudioSource[0];
+    private int _sfxNext;
 
     private int[] _tileTypes = new int[ChunkCount * TilesPerChunk];
     private int[] _hp = new int[ChunkCount * TilesPerChunk];
@@ -225,6 +234,7 @@ public class ChunkManager : UdonSharpBehaviour
     public void RequestHarvestTile(int tx, int tz, int toolType)
     {
         if (!Networking.IsOwner(gameObject)) return;
+        if (gameManager != null && gameManager.runState != GameManager.StateRunning) return;
         int wc = Mathf.FloorToInt((float)tx / ChunkLength);
         if (wc < baseChunk || wc >= baseChunk + ChunkCount) return;
         int slot = ((wc % ChunkCount) + ChunkCount) % ChunkCount;
@@ -319,7 +329,11 @@ public class ChunkManager : UdonSharpBehaviour
                     if (poolIdx >= 0)
                     {
                         Transform node = nodeRoots[poolIdx];
-                        if (node != null && node.gameObject.activeSelf) node.gameObject.SetActive(false);
+                        if (node != null && node.gameObject.activeSelf)
+                        {
+                            PlayBreakSfx(_tileTypes[slot * TilesPerChunk + t], node.position);
+                            node.gameObject.SetActive(false);
+                        }
                     }
                 }
                 _appliedMask[mb + j] = harvestMask[mb + j];
@@ -330,6 +344,17 @@ public class ChunkManager : UdonSharpBehaviour
     private bool MaskBit(int slot, int t)
     {
         return (harvestMask[slot * MaskIntsPerChunk + t / 32] & (1 << (t % 32))) != 0;
+    }
+
+    private void PlayBreakSfx(int tileType, Vector3 pos)
+    {
+        AudioClip clip = tileType == 0 ? treeBreakClip : rockBreakClip;
+        if (clip == null || sfxSources == null || sfxSources.Length == 0) return;
+        AudioSource src = sfxSources[_sfxNext];
+        _sfxNext = (_sfxNext + 1) % sfxSources.Length;
+        if (src == null) return;
+        src.transform.position = pos;
+        src.PlayOneShot(clip, 0.8f);
     }
 
     // ---------- 生成 (1mタイル, 固定小数点Perlin) ----------
@@ -403,6 +428,7 @@ public class ChunkManager : UdonSharpBehaviour
         if (worldChunk < corridorChunks && Mathf.Abs(wzTile - originZTile) < 2) return -1;
 
         int wxTile0 = worldChunk * TileW + lx;
+        if (wxTile0 >= 0 && wxTile0 <= keepClearXMax) return -1;
         int stationX = Mathf.RoundToInt((float)wxTile0 / stationTiles) * stationTiles;
         if (stationX > 0 && Mathf.Abs(wxTile0 - stationX) <= 2 && Mathf.Abs(wzTile - originZTile) <= 3) return -1;
 
