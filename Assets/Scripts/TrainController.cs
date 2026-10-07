@@ -19,6 +19,8 @@ public class TrainController : UdonSharpBehaviour
     public float derailMargin = 0.5f;
     public float remoteLerpRate = 10f;
     public ParticleSystem fireParticles;
+    public AudioSource waterAlarmSfx;
+    public AudioSource crashSfx;
 
     private float _displayDistance;
 
@@ -86,6 +88,14 @@ public class TrainController : UdonSharpBehaviour
             if (fire && !fireParticles.isPlaying) fireParticles.Play();
             else if (!fire && fireParticles.isPlaying) fireParticles.Stop();
         }
+
+        bool running = gameManager.runState == GameManager.StateRunning || gameManager.runState == GameManager.StateStationStop;
+        bool alarm = running && !fire && gameManager.waterLevel <= 1;
+        if (waterAlarmSfx != null)
+        {
+            if (alarm && !waterAlarmSfx.isPlaying) waterAlarmSfx.Play();
+            else if (!alarm && waterAlarmSfx.isPlaying) waterAlarmSfx.Stop();
+        }
     }
 
     private void ApplyTransform(float d)
@@ -127,5 +137,6 @@ public class TrainController : UdonSharpBehaviour
     public void PlayCrashFX()
     {
         if (crashParticles != null) crashParticles.Play();
+        if (crashSfx != null && crashSfx.clip != null) crashSfx.PlayOneShot(crashSfx.clip, 1f);
     }
 }

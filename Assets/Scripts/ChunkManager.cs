@@ -430,8 +430,19 @@ public class ChunkManager : UdonSharpBehaviour
         int wxTile0 = worldChunk * TileW + lx;
         if (wxTile0 >= 0 && wxTile0 <= keepClearXMax) return -1;
         int stationX = Mathf.RoundToInt((float)wxTile0 / stationTiles) * stationTiles;
-        if (stationX > 0 && Mathf.Abs(wxTile0 - stationX) <= 2 && Mathf.Abs(wzTile - originZTile) <= 3) return -1;
+        if (stationX > 0 && Mathf.Abs(wxTile0 - stationX) <= 2)
+        {
+            if (Mathf.Abs(wzTile - originZTile) <= 2) return -1;
+            if (IsInStationPlatform(wxTile0, wzTile, seed)) return -1;
+        }
 
+        return ComputeTileTypeRaw(worldChunk, seed, attempt, lx, lz);
+    }
+
+    private int ComputeTileTypeRaw(int worldChunk, int seed, int attempt, int lx, int lz)
+    {
+        int originZTile = Mathf.RoundToInt(origin.z);
+        int wzTile = TileZMin + lz + originZTile;
         int wxTile = worldChunk * TileW + lx;
         int pxCenter = wxTile * 100 + noiseOffsetCm;
         int pzCenter = wzTile * 100 + noiseOffsetCm;
@@ -445,6 +456,55 @@ public class ChunkManager : UdonSharpBehaviour
         if (rockV >= ThrRock[tier]) return 1;
         if (Noise1000(px, pz, wlTreeX, wlTreeZ, ls ^ LayerTree) >= ThrTree[tier]) return 0;
         return -1;
+    }
+
+    public bool IsInStationPlatform(int wx, int wzWorld, int seed)
+    {
+        int stationX = Mathf.RoundToInt((float)wx / stationTiles) * stationTiles;
+        if (stationX <= 0 || Mathf.Abs(wx - stationX) > 2) return false;
+        int zk = Mathf.RoundToInt(origin.z) + StationJitterOffset(stationX / stationTiles, seed);
+        return Mathf.Abs(wzWorld - zk) <= 1;
+    }
+
+    public int StationJitterOffset(int stationIndex, int seed)
+    {
+        int originZTile = Mathf.RoundToInt(origin.z);
+        int stationX = stationIndex * stationTiles;
+        uint h = NoiseHash(stationIndex, seed, 0x5A17C3D9u);
+        int start = (int)(h & 3u);
+        int bestOff = 2 + start;
+        int bestHard = int.MaxValue;
+        int bestObs = int.MaxValue;
+        for (int ci = 0; ci < 4; ci++)
+        {
+            int off = 2 + ((start + ci) & 3);
+            int zk = originZTile + off;
+            int hard = 0;
+            int obs = 0;
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                int wx = stationX + dx;
+                if (wx < 0) continue;
+                int wc = wx / TileW;
+                int lx = wx - wc * TileW;
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    int lz = (zk + dz) - originZTile - TileZMin;
+                    if (lz < 0 || lz >= TileH) continue;
+                    int t = ComputeTileTypeRaw(wc, seed, 0, lx, lz);
+                    if (t < 0) continue;
+                    obs++;
+                    if (t == 2) hard++;
+                }
+            }
+            if (hard < bestHard || (hard == bestHard && obs < bestObs))
+            {
+                bestOff = off;
+                bestHard = hard;
+                bestObs = obs;
+            }
+        }
+        return bestOff;
     }
 
     private void GenerateChunk(int slot, int worldChunk, int seed)
@@ -491,6 +551,7 @@ public class ChunkManager : UdonSharpBehaviour
             if (wxTile <= keepClearXMax) continue;
             int wzTile = TileZMin + lz + originZTile;
             if (Mathf.Abs(wzTile - originZTile) < 2) continue;
+            if (IsInStationPlatform(wxTile, wzTile, seed)) continue;
             _tileTypes[baseIdx + t] = 3;
             return;
         }

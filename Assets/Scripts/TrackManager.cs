@@ -10,6 +10,7 @@ public class TrackManager : UdonSharpBehaviour
 {
     public const int MaxTrack = 512;
     public const int StarterLength = 30;
+    public const int StarterBackLength = 7;
     public const float TileSize = 1f;
     public const int BridgeBit = 1 << 22;
     public const int RemovedBit = 1 << 23;
@@ -80,10 +81,10 @@ public class TrackManager : UdonSharpBehaviour
     public void OwnerBuildStarterTrack()
     {
         if (!Networking.IsOwner(gameObject)) return;
-        trackLength = StarterLength;
-        for (int i = 0; i < StarterLength; i++)
+        trackLength = StarterLength + StarterBackLength;
+        for (int i = 0; i < StarterLength + StarterBackLength; i++)
         {
-            trackData[i] = PackTile(i, 0, 0, 0);
+            trackData[i] = PackTile(i - StarterBackLength, 0, 0, 0);
         }
         RequestSerialization();
         ApplyTrack();
@@ -371,6 +372,7 @@ public class TrackManager : UdonSharpBehaviour
 
     public int CheckPlacement(int x, int z)
     {
+        if (z < ChunkManager.TileZMin || z >= ChunkManager.TileZMin + ChunkManager.TileH) return 0;
         if (!IsInWindow(x)) return 0;
         if (IsOccupied(x, z))
         {
@@ -533,6 +535,7 @@ public class TrackManager : UdonSharpBehaviour
         if (!Networking.IsOwner(gameObject)) return;
         if (tileIndex < 0 || tileIndex >= trackLength) return;
         if (IsRemoved(trackData[tileIndex])) return;
+        if (UnpackX(trackData[tileIndex]) < 0) return;
         int pIdx = PathIndexOf(tileIndex);
         if (pIdx >= 0 && trainController != null && pIdx <= Mathf.FloorToInt(trainController.trackDistance + 0.5f)) return;
 

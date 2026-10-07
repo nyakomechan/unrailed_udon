@@ -10,19 +10,23 @@ public class StationManager : UdonSharpBehaviour
     public Transform[] stationObjects = new Transform[3];
 
     private int _appliedStationCount = -1;
+    private int _appliedSeed = -1;
 
     void Update()
     {
         if (gameManager == null || chunkManager == null) return;
         int sc = gameManager.stationCount;
-        if (sc == _appliedStationCount) return;
+        int seed = gameManager.runSeed;
+        if (sc == _appliedStationCount && seed == _appliedSeed) return;
         _appliedStationCount = sc;
+        _appliedSeed = seed;
         for (int i = 0; i < stationObjects.Length; i++)
         {
             Transform st = stationObjects[i];
             if (st == null) continue;
             int k = sc + 1 + i;
-            st.position = new Vector3(k * chunkManager.stationTiles + chunkManager.origin.x, 0f, chunkManager.origin.z + 3.5f);
+            int zOff = seed == 0 ? 3 : chunkManager.StationJitterOffset(k, seed);
+            st.position = new Vector3(k * chunkManager.stationTiles + chunkManager.origin.x, 0f, chunkManager.origin.z + zOff);
         }
     }
 }
