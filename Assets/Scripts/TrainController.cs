@@ -18,6 +18,7 @@ public class TrainController : UdonSharpBehaviour
     public float speedPerStation = 0.12f;
     public float derailMargin = 0.5f;
     public float remoteLerpRate = 10f;
+    public ParticleSystem fireParticles;
 
     private float _displayDistance;
 
@@ -78,6 +79,13 @@ public class TrainController : UdonSharpBehaviour
             _displayDistance = Mathf.Lerp(_displayDistance, trackDistance, Time.deltaTime * remoteLerpRate);
         }
         ApplyTransform(_displayDistance);
+
+        bool fire = gameManager.boilerOnFire;
+        if (fireParticles != null)
+        {
+            if (fire && !fireParticles.isPlaying) fireParticles.Play();
+            else if (!fire && fireParticles.isPlaying) fireParticles.Stop();
+        }
     }
 
     private void ApplyTransform(float d)

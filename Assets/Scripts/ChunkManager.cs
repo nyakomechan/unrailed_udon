@@ -467,7 +467,33 @@ public class ChunkManager : UdonSharpBehaviour
                 _tileToPool[idx] = -1;
             }
         }
+        EnsurePond(slot, worldChunk, seed);
         AllocatePool(slot, worldChunk, seed);
+    }
+
+    private void EnsurePond(int slot, int worldChunk, int seed)
+    {
+        int baseIdx = slot * TilesPerChunk;
+        for (int t = 0; t < TilesPerChunk; t++)
+        {
+            if (_tileTypes[baseIdx + t] == 3) return;
+        }
+
+        int originZTile = Mathf.RoundToInt(origin.z);
+        int start = (int)(NoiseHash(worldChunk, seed, 0x51ED269Bu) & 0x7FFFFFFFu) % TilesPerChunk;
+        for (int k = 0; k < TilesPerChunk; k++)
+        {
+            int t = (start + k * 179) % TilesPerChunk;
+            if (_tileTypes[baseIdx + t] != -1) continue;
+            int lx = t % TileW;
+            int lz = t / TileW;
+            int wxTile = worldChunk * TileW + lx;
+            if (wxTile <= keepClearXMax) continue;
+            int wzTile = TileZMin + lz + originZTile;
+            if (Mathf.Abs(wzTile - originZTile) < 2) continue;
+            _tileTypes[baseIdx + t] = 3;
+            return;
+        }
     }
 
     private void AllocatePool(int slot, int worldChunk, int seed)

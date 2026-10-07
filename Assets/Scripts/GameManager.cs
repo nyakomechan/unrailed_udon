@@ -21,6 +21,8 @@ public class GameManager : UdonSharpBehaviour
     [UdonSynced] public int ironCount;
     [UdonSynced] public int railStock;
     [UdonSynced] public int resetSerial;
+    [UdonSynced] public int waterLevel;
+    [UdonSynced] public bool boilerOnFire;
 
     public TrackManager trackManager;
     public TrainController trainController;
@@ -28,12 +30,52 @@ public class GameManager : UdonSharpBehaviour
     public ScorePersistence scorePersistence;
     public RailStackWagon railStackWagon;
     public Transform spawnPoint;
+    public BucketManager bucketManager;
 
     private int _seenSerial = -1;
+    private float _waterTimer;
+    private float _fireTimer;
+
+    void Update()
+    {
+        if (!Networking.IsOwner(gameObject)) return;
+        if (runState != StateRunning && runState != StateStationStop) return;
+
+        if (!boilerOnFire)
+        {
+            _waterTimer += Time.deltaTime;
+            if (_waterTimer >= waterBurnSeconds)
+            {
+                _waterTimer = 0f;
+                if (waterLevel > 0)
+                {
+                    waterLevel--;
+                    if (waterLevel <= 0)
+                    {
+                        boilerOnFire = true;
+                        _fireTimer = 0f;
+                    }
+                    RequestSerialization();
+                }
+            }
+        }
+        else
+        {
+            _fireTimer += Time.deltaTime;
+            if (_fireTimer >= fireGraceSeconds)
+            {
+                _fireTimer = 0f;
+                NotifyDerailed();
+            }
+        }
+    }
 
     public float countdownSeconds = 3f;
     public float stationStopSeconds = 10f;
     public int stationTiles = 30;
+    public int waterMax = 6;
+    public float waterBurnSeconds = 25f;
+    public float fireGraceSeconds = 20f;
     public int railStockMax = 8;
     public int woodMax = 8;
     public int ironMax = 8;
@@ -122,7 +164,7 @@ public class GameManager : UdonSharpBehaviour
     public void NotifyDerailed()
     {
         if (!Networking.IsOwner(gameObject)) return;
-        if (runState != StateRunning) return;
+        if (runState != StateRunning && runState != StateStationStop) return;
         runState = StateCrashed;
         score = ComputeScore();
         RequestSerialization();
@@ -144,7 +186,12 @@ public class GameManager : UdonSharpBehaviour
         ironCount = 0;
         runState = StateIdle;
         railStock = 0;
+        waterLevel = waterMax;
+        boilerOnFire = false;
+        _waterTimer = 0f;
+        _fireTimer = 0f;
         trainController.OwnerResetDistance();
+        if (bucketManager != null) bucketManager.OwnerResetBuckets();
         trackManager.OwnerBuildStarterTrack();
         trackManager.OwnerReturnAllRails();
         if (chunkManager != null)
@@ -206,6 +253,18 @@ public class GameManager : UdonSharpBehaviour
     {
         if (!Networking.IsOwner(gameObject)) return;
         railStock = Mathf.Min(railStock + n, railStockMax);
+        RequestSerialization();
+    }
+
+    public void OwnerAddWater(int n)
+    {
+        if (!Networking.IsOwner(gameObject)) return;
+        waterLevel = Mathf.Min(waterLevel + n, waterMax);
+        if (boilerOnFire && waterLevel > 0)
+        {
+            boilerOnFire = false;
+            _fireTimer = 0f;
+        }
         RequestSerialization();
     }
 

@@ -42,7 +42,8 @@ public class ScoreBoard : UdonSharpBehaviour
             + "  Speed " + (gameManager.trainController != null ? gameManager.trainController.CurrentSpeed().ToString("F2") : "0");
         string line2 = "Wood " + gameManager.woodCount + "/" + gameManager.woodMax
             + "  Iron " + gameManager.ironCount + "/" + gameManager.ironMax
-            + "  Rail " + gameManager.railStock + "/" + gameManager.railStockMax;
+            + "  Rail " + gameManager.railStock + "/" + gameManager.railStockMax
+            + "  Water " + gameManager.waterLevel + "/" + gameManager.waterMax;
 
         string line3;
         Color col = Color.white;
@@ -71,6 +72,16 @@ public class ScoreBoard : UdonSharpBehaviour
             line3 = "Next station in " + remain + "m";
         }
         if (Time.time < _flashUntil) col = new Color(1f, 0.9f, 0.3f);
+        if ((st == GameManager.StateRunning || st == GameManager.StateStationStop) && gameManager.waterLevel <= 1)
+        {
+            line3 = "LOW WATER!";
+            col = new Color(1f, 0.7f, 0.2f);
+        }
+        if (gameManager.boilerOnFire)
+        {
+            line3 = "FIRE!! REFILL NOW!";
+            col = new Color(1f, 0.3f, 0.2f);
+        }
 
         string line4 = "Last Score " + (persistence != null ? persistence.lastRunScore : gameManager.score)
             + "  Best " + (persistence != null ? persistence.bestScore : 0);
