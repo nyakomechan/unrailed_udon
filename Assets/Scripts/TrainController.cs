@@ -2,10 +2,11 @@ using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
 
-[UdonBehaviourSyncMode(BehaviourSyncMode.Continuous)]
+[UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class TrainController : UdonSharpBehaviour
 {
     [UdonSynced] public float trackDistance;
+    [UdonSynced] public bool stationBoost;
 
     public GameManager gameManager;
     public TrackManager trackManager;
@@ -16,18 +17,26 @@ public class TrainController : UdonSharpBehaviour
 
     public float baseSpeed = 0.25f;
     public float speedPerStation = 0.12f;
+    public float stationBoostMultiplier = 3f;
     public float derailMargin = 0.5f;
-    public float remoteLerpRate = 10f;
+    public float syncInterval = 10f;
+    public float remoteCorrectRate = 3f;
     public ParticleSystem fireParticles;
     public AudioSource waterAlarmSfx;
     public AudioSource crashSfx;
 
     private float _displayDistance;
+    private float _remoteBase;
+    private float _remoteBaseTime;
+    private float _nextSync;
+    private int _lastRunState = -1;
 
     void Start()
     {
         ClaimOwnershipIfMaster();
         _displayDistance = trackDistance;
+        _remoteBase = trackDistance;
+        _remoteBaseTime = Time.time;
     }
 
     private void ClaimOwnershipIfMaster()
@@ -45,7 +54,14 @@ public class TrainController : UdonSharpBehaviour
 
     public float CurrentSpeed()
     {
-        return baseSpeed + gameManager.stationCount * speedPerStation;
+        return (baseSpeed + gameManager.stationCount * speedPerStation) * (stationBoost ? stationBoostMultiplier : 1f);
+    }
+
+    public override void OnDeserialization()
+    {
+        _remoteBase = trackDistance;
+        _remoteBaseTime = Time.time;
+        if (Mathf.Abs(_displayDistance - trackDistance) > 3f) _displayDistance = trackDistance;
     }
 
     void Update()
@@ -53,10 +69,23 @@ public class TrainController : UdonSharpBehaviour
         if (trackManager == null || gameManager == null) return;
         if (trackManager.trackLength <= 0) return;
 
+        int runState = gameManager.runState;
+
         if (Networking.IsOwner(gameObject))
         {
-            if (gameManager.runState == GameManager.StateRunning)
+            if (runState == GameManager.StateRunning)
             {
+                bool boost = false;
+                if (gameManager.stationTiles > 0)
+                {
+                    int nextStationX = (gameManager.stationCount + 1) * gameManager.stationTiles;
+                    boost = trackManager.IsOnPath(nextStationX - 1, 0);
+                }
+                if (boost != stationBoost)
+                {
+                    stationBoost = boost;
+                    RequestSerialization();
+                }
                 trackDistance += CurrentSpeed() * Time.deltaTime;
                 float limit = trackManager.GetEndDistance() - derailMargin;
                 if (trackDistance >= limit)
@@ -74,12 +103,35 @@ public class TrainController : UdonSharpBehaviour
                     }
                 }
             }
+            else if (stationBoost)
+            {
+                stationBoost = false;
+                RequestSerialization();
+            }
             _displayDistance = trackDistance;
+            if (runState != _lastRunState)
+            {
+                RequestSerialization();
+                _nextSync = Time.time + syncInterval;
+            }
+            else if (Time.time >= _nextSync)
+            {
+                _nextSync = Time.time + syncInterval;
+                RequestSerialization();
+            }
         }
         else
         {
-            _displayDistance = Mathf.Lerp(_displayDistance, trackDistance, Time.deltaTime * remoteLerpRate);
+            float target = _remoteBase;
+            if (runState == GameManager.StateRunning)
+            {
+                target = _remoteBase + CurrentSpeed() * (Time.time - _remoteBaseTime);
+                float limit = trackManager.GetEndDistance() - derailMargin;
+                if (target > limit) target = limit;
+            }
+            _displayDistance = Mathf.Lerp(_displayDistance, target, Time.deltaTime * remoteCorrectRate);
         }
+        _lastRunState = runState;
         ApplyTransform(_displayDistance);
 
         bool fire = gameManager.boilerOnFire;
@@ -89,7 +141,7 @@ public class TrainController : UdonSharpBehaviour
             else if (!fire && fireParticles.isPlaying) fireParticles.Stop();
         }
 
-        bool running = gameManager.runState == GameManager.StateRunning || gameManager.runState == GameManager.StateStationStop;
+        bool running = runState == GameManager.StateRunning || runState == GameManager.StateStationStop;
         bool alarm = running && !fire && gameManager.waterLevel <= 1;
         if (waterAlarmSfx != null)
         {
@@ -132,6 +184,9 @@ public class TrainController : UdonSharpBehaviour
         if (!Networking.IsOwner(gameObject)) return;
         trackDistance = 0f;
         _displayDistance = 0f;
+        stationBoost = false;
+        _nextSync = Time.time + syncInterval;
+        RequestSerialization();
     }
 
     public void PlayCrashFX()

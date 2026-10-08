@@ -16,8 +16,13 @@ public class BucketManager : UdonSharpBehaviour
     public float snapDistance = 15f;
     public float settleDistance = 1.5f;
     public float pourVerifyDistance = 3.5f;
+    public AudioClip scoopClip;
+    public AudioClip pourClip;
+    public AudioSource[] bucketSfxSources = new AudioSource[0];
 
     [UdonSynced] public int bucketMask;
+
+    private int _appliedBucketMask = -1;
 
     private float _nextSnapCheck;
     private VRCPlayerApi[] _players = new VRCPlayerApi[8];
@@ -127,6 +132,19 @@ public class BucketManager : UdonSharpBehaviour
             bool want = IsFull(i);
             if (bucketWaterVisuals[i].activeSelf != want) bucketWaterVisuals[i].SetActive(want);
         }
+        if (_appliedBucketMask >= 0)
+        {
+            for (int i = 0; i < buckets.Length; i++)
+            {
+                bool was = (_appliedBucketMask & (1 << i)) != 0;
+                bool now = IsFull(i);
+                if (was == now) continue;
+                AudioClip clip = now ? scoopClip : pourClip;
+                if (clip != null && i < bucketSfxSources.Length && bucketSfxSources[i] != null)
+                    bucketSfxSources[i].PlayOneShot(clip, 0.9f);
+            }
+        }
+        _appliedBucketMask = bucketMask;
     }
 
     void LateUpdate()

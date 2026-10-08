@@ -72,7 +72,7 @@ public class GameManager : UdonSharpBehaviour
 
     public float countdownSeconds = 3f;
     public float stationStopSeconds = 10f;
-    public int stationTiles = 30;
+    public int stationTiles = 40;
     public int waterMax = 6;
     public float waterBurnSeconds = 25f;
     public float fireGraceSeconds = 20f;
@@ -136,6 +136,7 @@ public class GameManager : UdonSharpBehaviour
         stationCount++;
         RequestSerialization();
         ApplyState();
+        for (int k = stationCount + 1; k <= stationCount + 3; k++) trackManager.OwnerBuildStationStub(k);
         SendCustomEventDelayedSeconds(nameof(_DepartTrain), stationStopSeconds);
     }
 
@@ -193,6 +194,7 @@ public class GameManager : UdonSharpBehaviour
         trainController.OwnerResetDistance();
         if (bucketManager != null) bucketManager.OwnerResetBuckets();
         trackManager.OwnerBuildStarterTrack();
+        for (int k = 1; k <= 3; k++) trackManager.OwnerBuildStationStub(k);
         trackManager.OwnerReturnAllRails();
         if (chunkManager != null)
         {

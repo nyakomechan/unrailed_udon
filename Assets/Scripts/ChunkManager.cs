@@ -19,7 +19,7 @@ public class ChunkManager : UdonSharpBehaviour
     [Header("Generation tuning")]
     public int corridorChunks = 2;
     public int maxAttempt = 3;
-    public int stationTiles = 30;
+    public int stationTiles = 40;
     public int noiseOffsetCm = 10000;
     public int wlTreeX = 1200, wlTreeZ = 900;
     public int wlRockX = 1000, wlRockZ = 800;
@@ -461,14 +461,13 @@ public class ChunkManager : UdonSharpBehaviour
     public bool IsInStationPlatform(int wx, int wzWorld, int seed)
     {
         int stationX = Mathf.RoundToInt((float)wx / stationTiles) * stationTiles;
-        if (stationX <= 0 || Mathf.Abs(wx - stationX) > 2) return false;
+        if (stationX <= 0 || Mathf.Abs(wx - stationX) > 1) return false;
         int zk = Mathf.RoundToInt(origin.z) + StationJitterOffset(stationX / stationTiles, seed);
-        return Mathf.Abs(wzWorld - zk) <= 1;
+        return wzWorld == zk;
     }
 
     public int StationJitterOffset(int stationIndex, int seed)
     {
-        int originZTile = Mathf.RoundToInt(origin.z);
         int stationX = stationIndex * stationTiles;
         uint h = NoiseHash(stationIndex, seed, 0x5A17C3D9u);
         int start = (int)(h & 3u);
@@ -478,24 +477,19 @@ public class ChunkManager : UdonSharpBehaviour
         for (int ci = 0; ci < 4; ci++)
         {
             int off = 2 + ((start + ci) & 3);
-            int zk = originZTile + off;
+            int lz = off - TileZMin;
             int hard = 0;
             int obs = 0;
-            for (int dx = -2; dx <= 2; dx++)
+            for (int dx = -1; dx <= 1; dx++)
             {
                 int wx = stationX + dx;
                 if (wx < 0) continue;
                 int wc = wx / TileW;
                 int lx = wx - wc * TileW;
-                for (int dz = -1; dz <= 1; dz++)
-                {
-                    int lz = (zk + dz) - originZTile - TileZMin;
-                    if (lz < 0 || lz >= TileH) continue;
-                    int t = ComputeTileTypeRaw(wc, seed, 0, lx, lz);
-                    if (t < 0) continue;
-                    obs++;
-                    if (t == 2) hard++;
-                }
+                int t = ComputeTileTypeRaw(wc, seed, 0, lx, lz);
+                if (t < 0) continue;
+                obs++;
+                if (t == 2) hard++;
             }
             if (hard < bestHard || (hard == bestHard && obs < bestObs))
             {

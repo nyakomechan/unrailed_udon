@@ -297,6 +297,52 @@ public class TrackManager : UdonSharpBehaviour
         return -1;
     }
 
+    public bool IsOnPath(int tx, int tz)
+    {
+        int idx = FindPresentIndexAt(tx, tz);
+        return idx >= 0 && PathIndexOf(idx) >= 0;
+    }
+
+    public void OwnerBuildStationStub(int stationIndex)
+    {
+        if (!Networking.IsOwner(gameObject)) return;
+        if (chunkManager == null) return;
+        int stationX = stationIndex * chunkManager.stationTiles;
+        bool dirty = false;
+        for (int i = 0; i < 2; i++)
+        {
+            int x = stationX - 1 + i;
+            if (FindPresentIndexAt(x, 0) >= 0) continue;
+            int removedIdx = FindRemovedIndexAt(x, 0);
+            if (removedIdx >= 0)
+            {
+                trackData[removedIdx] &= ~RemovedBit;
+                trackData[removedIdx] &= ~3;
+                dirty = true;
+                continue;
+            }
+            if (trackLength >= MaxTrack) break;
+            trackData[trackLength] = PackTile(x, 0, 0, 0);
+            trackLength++;
+            dirty = true;
+        }
+        if (dirty)
+        {
+            RequestSerialization();
+            ApplyTrack();
+        }
+    }
+
+    private bool IsStationStubTile(int x, int z)
+    {
+        if (z != 0 || chunkManager == null) return false;
+        int st = chunkManager.stationTiles;
+        if (st <= 0) return false;
+        int k = Mathf.RoundToInt((float)(x + 1) / st);
+        if (k < 1) return false;
+        return x == k * st - 1 || x == k * st;
+    }
+
     public int GetDirIfRemovedAt(int tx, int tz)
     {
         int idx = FindRemovedIndexAt(tx, tz);
@@ -536,6 +582,7 @@ public class TrackManager : UdonSharpBehaviour
         if (tileIndex < 0 || tileIndex >= trackLength) return;
         if (IsRemoved(trackData[tileIndex])) return;
         if (UnpackX(trackData[tileIndex]) < 0) return;
+        if (IsStationStubTile(UnpackX(trackData[tileIndex]), UnpackZ(trackData[tileIndex]))) return;
         int pIdx = PathIndexOf(tileIndex);
         if (pIdx >= 0 && trainController != null && pIdx <= Mathf.FloorToInt(trainController.trackDistance + 0.5f)) return;
 
